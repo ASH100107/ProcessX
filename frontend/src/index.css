@@ -62,3 +62,21 @@
   stroke-dasharray: 6;
   animation: flow-dash 1.2s linear infinite;
 }
+
+/* Recharts — readable text on dark theme */
+.recharts-text,
+.recharts-cartesian-axis-tick-value,
+.recharts-label {
+  fill: #f1f5f9 !important;
+}
+
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: #1e293b !important;
+  border-color: #64748b !important;
+}
+
+.recharts-tooltip-item-name,
+.recharts-tooltip-item-value,
+.recharts-tooltip-label {
+  color: #f1f5f9 !important;
+}

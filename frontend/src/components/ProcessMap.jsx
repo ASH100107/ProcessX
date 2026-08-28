@@ -2,7 +2,13 @@ import React, { useState } from 'react';
 import { ArrowRight, AlertCircle, CheckCircle2, AlertTriangle, Layers, Info } from 'lucide-react';
 import StageDetailModal from './StageDetailModal';
 
-export default function ProcessMap({ mapData }) {
+export default function ProcessMap({
+  mapData,
+  title = 'Autonomous Process Flow Map',
+  subtitle = 'Real-time stage health, bottleneck scores, and queue dynamics. Click any stage to inspect.',
+  variant = 'default',
+  showTransitions = false
+}) {
   const [selectedStage, setSelectedStage] = useState(null);
 
   if (!mapData || !mapData.nodes) return null;
@@ -41,17 +47,29 @@ export default function ProcessMap({ mapData }) {
     }
   };
 
+  const borderAccent = variant === 'before'
+    ? 'border-slate-600'
+    : variant === 'after'
+    ? 'border-emerald-500/30'
+    : 'border-slate-800';
+
   return (
-    <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-sm backdrop-blur-sm">
+    <div className={`bg-slate-900/90 border ${borderAccent} rounded-2xl p-6 shadow-sm backdrop-blur-sm`}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
         <div>
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <Layers className="w-4 h-4 text-sky-400" />
-            Autonomous Process Flow Map
-          </h2>
-          <p className="text-xs text-slate-400">
-            Real-time stage health, bottleneck scores, and queue dynamics. Click any stage to inspect.
-          </p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <Layers className="w-4 h-4 text-sky-400" />
+              {title}
+            </h2>
+            {variant === 'before' && (
+              <span className="px-2 py-0.5 text-[9px] font-bold uppercase bg-slate-800 text-slate-400 border border-slate-600 rounded">Original</span>
+            )}
+            {variant === 'after' && (
+              <span className="px-2 py-0.5 text-[9px] font-bold uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded">Re-evaluated</span>
+            )}
+          </div>
+          <p className="text-xs text-slate-300 mt-0.5">{subtitle}</p>
         </div>
         <div className="flex items-center gap-3 text-xs text-slate-400">
           <span className="flex items-center gap-1.5">
@@ -100,29 +118,48 @@ export default function ProcessMap({ mapData }) {
                   </h3>
                 </div>
 
-                {/* Metrics */}
-                <div className="mt-4 pt-3 border-t border-slate-800/60 space-y-1.5">
+                {/* Metrics — high contrast on all card backgrounds */}
+                <div className="mt-4 pt-3 border-t border-white/10 space-y-2 bg-black/20 rounded-lg p-2.5 -mx-0.5">
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-400">Lead Time:</span>
-                    <span className="font-semibold text-white font-mono">{node.mean_duration}m</span>
+                    <span className="text-slate-200 font-medium">Lead Time:</span>
+                    <span className="font-bold text-white font-mono text-sm">{node.mean_duration}m</span>
                   </div>
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-400">Queue Delay:</span>
-                    <span className="font-semibold text-indigo-300 font-mono">{node.mean_queue_time}m</span>
+                    <span className="text-slate-200 font-medium">Queue Delay:</span>
+                    <span className="font-bold text-sky-300 font-mono text-sm">{node.mean_queue_time}m</span>
                   </div>
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-400">SLA Breach:</span>
-                    <span className={`font-semibold font-mono ${node.sla_violation_rate > 10 ? 'text-rose-400' : 'text-slate-300'}`}>
+                    <span className="text-slate-200 font-medium">SLA Breach:</span>
+                    <span className={`font-bold font-mono text-sm ${node.sla_violation_rate > 10 ? 'text-rose-300' : 'text-emerald-300'}`}>
                       {node.sla_violation_rate}%
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-400">Score:</span>
-                    <span className={`font-bold font-mono ${isBottleneck ? 'text-amber-400' : 'text-slate-400'}`}>
+                    <span className="text-slate-200 font-medium">Score:</span>
+                    <span className={`font-bold font-mono text-sm ${isBottleneck ? 'text-amber-300' : 'text-slate-200'}`}>
                       {node.bottleneck_score}/100
                     </span>
                   </div>
                 </div>
+
+                {/* Health transition badge (after map) */}
+                {showTransitions && node.transition?.changed && (
+                  <div className={`mt-2 flex items-center justify-center gap-1.5 text-[10px] font-bold rounded-lg py-1.5 px-2 ${
+                    node.transition.improved
+                      ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
+                      : node.transition.worsened
+                      ? 'bg-amber-500/15 border border-amber-500/30 text-amber-300'
+                      : 'bg-slate-800 border border-slate-700 text-slate-400'
+                  }`}>
+                    <span className={node.transition.improved ? 'text-red-400 line-through' : 'text-slate-400'}>
+                      {node.transition.health_before}
+                    </span>
+                    <ArrowRight className="w-3 h-3" />
+                    <span className={node.transition.improved ? 'text-emerald-400' : node.transition.worsened ? 'text-amber-400' : 'text-white'}>
+                      {node.transition.health_after}
+                    </span>
+                  </div>
+                )}
 
                 {/* Click to inspect tip */}
                 <div className="mt-3 flex items-center justify-center gap-1 text-[10px] text-sky-400 opacity-0 group-hover:opacity-100 transition-opacity">

@@ -68,8 +68,8 @@ export default function BottleneckTable({ bottlenecks, onSelectStage }) {
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs text-slate-300">
-          <thead className="bg-slate-950/60 text-slate-400 font-semibold border-b border-slate-800 uppercase tracking-wider text-[10px]">
+        <table className="w-full text-left text-xs text-slate-200">
+          <thead className="bg-slate-800 text-slate-200 font-semibold border-b border-slate-600 uppercase tracking-wider text-[10px]">
             <tr>
               <th className="py-3 px-4">Stage</th>
               <th className="py-3 px-4">Bottleneck Score</th>
@@ -114,7 +114,7 @@ export default function BottleneckTable({ bottlenecks, onSelectStage }) {
                   <span className="text-white font-bold">{b.mean_duration}m</span>
                   <span className="text-slate-400 ml-1">/ {b.p95_duration}m</span>
                 </td>
-                <td className="py-3.5 px-4 font-mono text-indigo-300">
+                <td className="py-3.5 px-4 font-mono text-sky-300 font-semibold">
                   {b.mean_queue_time}m ({Math.round(b.queue_ratio * 100)}%)
                 </td>
                 <td className="py-3.5 px-4 font-mono">

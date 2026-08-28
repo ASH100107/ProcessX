@@ -10,9 +10,12 @@ import {
   Sparkles
 } from 'lucide-react';
 import { api } from './services/api';
+import { normalizeReEvalResult } from './utils/mapHelpers';
+import Navbar from './components/Navbar';
 import Header from './components/Header';
 import OverviewKPIs from './components/OverviewKPIs';
 import ProcessMap from './components/ProcessMap';
+import ProcessMapComparison from './components/ProcessMapComparison';
 import BottleneckTable from './components/BottleneckTable';
 import DelayCauseBreakdown from './components/DelayCauseBreakdown';
 import InvestigationTree from './components/InvestigationTree';
@@ -143,7 +146,96 @@ export default function App() {
   const [baseline, setBaseline] = useState(null);
   const [mlMetrics, setMlMetrics] = useState(null);
   const [investigation, setInvestigation] = useState(null);
-  const [reEvalResult, setReEvalResult] = useState(null);
+  const [originalMapSnapshot, setOriginalMapSnapshot] = useState(null);
+  const [reEvalHistory, setReEvalHistory] = useState([]);
+  const [activeSection, setActiveSection] = useState('overview');
+
+  const handleNavigate = (sectionId) => {
+    setActiveSection(sectionId);
+  };
+
+  const renderActivePage = () => {
+    switch (activeSection) {
+      case 'overview':
+        return (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <ProcessHealthBanner overview={overview} health={health} />
+            <OverviewKPIs overview={overview} />
+          </div>
+        );
+      case 'process-map':
+        return (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {reEvalHistory.length > 0 && originalMapSnapshot ? (
+              <ProcessMapComparison originalMap={originalMapSnapshot} history={reEvalHistory} />
+            ) : (
+              <ProcessMap mapData={mapData} />
+            )}
+          </div>
+        );
+      case 'bottlenecks':
+        return (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <BottleneckTable bottlenecks={bottlenecks} />
+            <DelayCauseBreakdown delayCausesData={delayCauses} mlMetrics={mlMetrics} />
+          </div>
+        );
+      case 'investigation':
+        return (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <ActivityFeed timeline={investigation?.timeline || []} />
+            <InvestigationTree investigation={investigation} />
+            {recommendedAction && (
+              <div className="space-y-4">
+                <RecommendationCard recommendation={recommendedAction} />
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-xs text-slate-400">
+                    {reEvalHistory.length > 0
+                      ? `${reEvalHistory.length} intervention(s) applied — click again to stack another evaluation map`
+                      : 'Simulates applying the recommended fix and re-runs bottleneck detection'}
+                  </p>
+                  <button
+                    onClick={() => handleApplyIntervention(recommendedAction.intervention?.id)}
+                    disabled={isApplying}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-lg shadow-lg shadow-emerald-600/20 transition disabled:opacity-50"
+                  >
+                    {isApplying ? (
+                      <><RefreshCw className="w-4 h-4 animate-spin" /> Applying & Re-evaluating...</>
+                    ) : (
+                      <><Sparkles className="w-4 h-4" /> Apply Recommended Intervention & Re-evaluate</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+            {reEvalHistory.length > 0 && originalMapSnapshot && (
+              <ProcessMapComparison originalMap={originalMapSnapshot} history={reEvalHistory} />
+            )}
+          </div>
+        );
+      case 'simulation':
+        return (
+          <div className="animate-in fade-in duration-200">
+            <SimulationLab catalog={catalog} />
+          </div>
+        );
+      case 'baseline':
+        return (
+          <div className="animate-in fade-in duration-200">
+            {baseline ? (
+              <BaselineComparison comparisonData={baseline} mlMetrics={mlMetrics} />
+            ) : (
+              <div className="bg-slate-900 border border-slate-700 rounded-2xl p-12 text-center">
+                <p className="text-slate-300 text-sm font-medium">No baseline comparison yet</p>
+                <p className="text-slate-400 text-xs mt-2">Run an autonomous investigation first to generate baseline data.</p>
+              </div>
+            )}
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
 
   const loadDashboardData = useCallback(async () => {
     setLoading(true);
@@ -179,7 +271,8 @@ export default function App() {
   const handleSelectScenario = async (newScenario) => {
     setScenario(newScenario);
     setInvestigation(null);
-    setReEvalResult(null);
+    setOriginalMapSnapshot(null);
+    setReEvalHistory([]);
     setBaseline(null);
     setLoading(true);
     setError(null);
@@ -195,7 +288,8 @@ export default function App() {
   const handleRunInvestigation = async () => {
     setIsInvestigating(true);
     setError(null);
-    setReEvalResult(null);
+    setOriginalMapSnapshot(null);
+    setReEvalHistory([]);
     try {
       const result = await api.startInvestigation(scenario);
       setInvestigation(result);
@@ -212,10 +306,30 @@ export default function App() {
     if (!interventionId) return;
     setIsApplying(true);
     setError(null);
+
+    // Capture current map as "before" snapshot for this step
+    const fallbackBefore = originalMapSnapshot || mapData;
+
     try {
       const result = await api.reEvaluateProcess(interventionId);
-      setReEvalResult(result);
+      const normalized = normalizeReEvalResult(result, fallbackBefore);
+
+      if (!normalized.map_before?.nodes?.length) {
+        throw new Error('Re-evaluation did not return process map data. Is the backend running the latest code?');
+      }
+      if (!normalized.map_after?.nodes?.length) {
+        throw new Error('Re-evaluation did not return after-state map data.');
+      }
+
+      setOriginalMapSnapshot((orig) => orig || normalized.map_before);
+
+      setReEvalHistory((prev) => [
+        ...prev,
+        { ...normalized, step: prev.length + 1, appliedAt: new Date().toISOString() }
+      ]);
+
       await loadDashboardData();
+      setActiveSection('process-map');
     } catch (err) {
       setError(err.message || 'Failed to apply intervention');
     } finally {
@@ -226,18 +340,23 @@ export default function App() {
   const recommendedAction = investigation?.recommended_action;
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <Header
+    <div className="min-h-screen bg-slate-950 flex">
+      <Navbar
+        activeSection={activeSection}
+        onNavigate={handleNavigate}
         scenario={scenario}
         onSelectScenario={handleSelectScenario}
         onRunInvestigation={handleRunInvestigation}
         isInvestigating={isInvestigating}
         onOpenMLModal={() => setShowMLModal(true)}
-        health={health}
         onRefresh={loadDashboardData}
+        health={health}
       />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <div className="flex-1 lg:ml-60 min-w-0 flex flex-col">
+        <Header activeSection={activeSection} overview={overview} />
+
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
         {error && (
           <div className="bg-red-950/40 border border-red-500/40 rounded-xl p-4 flex items-center gap-3 text-sm text-red-300">
             <AlertCircle className="w-5 h-5 shrink-0" />
@@ -254,56 +373,10 @@ export default function App() {
             <p className="text-sm font-medium">Loading ProcessX telemetry from backend...</p>
           </div>
         ) : (
-          <>
-            <ProcessHealthBanner overview={overview} health={health} />
-            <OverviewKPIs overview={overview} />
-            <ProcessMap mapData={mapData} />
-            <BottleneckTable bottlenecks={bottlenecks} />
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <DelayCauseBreakdown delayCausesData={delayCauses} mlMetrics={mlMetrics} />
-              <ActivityFeed timeline={investigation?.timeline || []} />
-            </div>
-
-            <InvestigationTree investigation={investigation} />
-
-            {recommendedAction && (
-              <div className="space-y-4">
-                <RecommendationCard recommendation={recommendedAction} />
-                <div className="flex justify-end">
-                  <button
-                    onClick={() => handleApplyIntervention(recommendedAction.intervention?.id)}
-                    disabled={isApplying}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-lg shadow-lg shadow-emerald-600/20 transition disabled:opacity-50"
-                  >
-                    {isApplying ? (
-                      <><RefreshCw className="w-4 h-4 animate-spin" /> Applying & Re-evaluating...</>
-                    ) : (
-                      <><Sparkles className="w-4 h-4" /> Apply Recommended Intervention & Re-evaluate</>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {reEvalResult && (
-              <div className="bg-cyan-950/30 border border-cyan-500/30 rounded-xl p-4 text-sm">
-                <h3 className="font-bold text-cyan-300 mb-2">Post-Intervention Re-evaluation Complete</h3>
-                <p className="text-slate-300 text-xs">
-                  Applied <strong>{reEvalResult.applied_intervention?.name}</strong> to <strong>{reEvalResult.target_stage}</strong>.
-                  {reEvalResult.bottleneck_shifted
-                    ? ` Bottleneck shifted to ${reEvalResult.new_primary_bottleneck} (${reEvalResult.new_primary_severity}).`
-                    : ' Target stage normalized. Process stabilized.'}
-                </p>
-              </div>
-            )}
-
-            <SimulationLab catalog={catalog} />
-
-            {baseline && <BaselineComparison comparisonData={baseline} mlMetrics={mlMetrics} />}
-          </>
+          renderActivePage()
         )}
-      </main>
+        </main>
+      </div>
 
       {showMLModal && (
         <MLMetricsModal metrics={mlMetrics} onClose={() => setShowMLModal(false)} />

@@ -79,11 +79,8 @@ class ProcessService:
             "stages": bottlenecks
         }
 
-    def get_process_map(self) -> Dict[str, Any]:
-        """Build interactive graph node data for the 6-stage process."""
-        overview = self.get_overview()
-        stages_data = overview["stages"]
-
+    def _stages_to_map(self, stages_data: List[Dict[str, Any]], scenario: Optional[str] = None) -> Dict[str, Any]:
+        """Convert bottleneck stage metrics into process map node/edge structure."""
         nodes = []
         for s in stages_data:
             nodes.append({
@@ -104,22 +101,27 @@ class ProcessService:
                 "delay_contribution": s["delay_contribution_pct"]
             })
 
-        # Edges between consecutive stages
+        nodes = sorted(nodes, key=lambda n: n["order"])
         edges = []
         for i in range(len(nodes) - 1):
             edges.append({
                 "id": f"edge_{nodes[i]['id']}_to_{nodes[i+1]['id']}",
                 "source": nodes[i]["id"],
-                "target": nodes[i+1]["id"],
+                "target": nodes[i + 1]["id"],
                 "transfer_time": "0.5m",
                 "label": "Next Stage Handover"
             })
 
         return {
-            "nodes": sorted(nodes, key=lambda n: n["order"]),
+            "nodes": nodes,
             "edges": edges,
-            "scenario": self.current_scenario
+            "scenario": scenario or self.current_scenario
         }
+
+    def get_process_map(self) -> Dict[str, Any]:
+        """Build interactive graph node data for the 6-stage process."""
+        overview = self.get_overview()
+        return self._stages_to_map(overview["stages"])
 
     def get_bottlenecks(self) -> List[Dict[str, Any]]:
         """Get ranked stage bottlenecks."""
@@ -201,6 +203,11 @@ class ProcessService:
 
     def re_evaluate_process(self, intervention_id: str) -> Dict[str, Any]:
         """Apply intervention to process state and recalculate all metrics."""
+        # Snapshot BEFORE state
+        before_overview = self.get_overview()
+        stages_before = before_overview["stages"]
+        map_before = self._stages_to_map(stages_before)
+
         full_sim = self.simulation_engine.simulate_intervention(
             df=self.current_df,
             intervention_id=intervention_id
@@ -210,14 +217,44 @@ class ProcessService:
 
         anom_after = ml_service.anomaly_detector.analyze_stage_anomalies(sim_df) if ml_service.anomaly_detector.is_fitted else None
         re_ranked = ml_service.bottleneck_detector.analyze(sim_df, stage_anomalies=anom_after)
+        map_after = self._stages_to_map(re_ranked)
 
         target_stage = full_sim["target_stage"]
-        orig_before = next((s for s in re_ranked if s["stage"] == target_stage), None)
+        orig_after = next((s for s in re_ranked if s["stage"] == target_stage), None)
         new_top_stage = re_ranked[0]
         bottleneck_shifted = (
             new_top_stage["stage"] != target_stage
             and new_top_stage["severity"] in ("CRITICAL", "WARNING")
         )
+
+        health_order = {"Healthy": 0, "Warning": 1, "Critical": 2}
+        health_transitions = []
+        for after_s in re_ranked:
+            before_s = next((s for s in stages_before if s["stage"] == after_s["stage"]), None)
+            if not before_s:
+                continue
+            hb = before_s["health"]
+            ha = after_s["health"]
+            improved = health_order.get(ha, 0) < health_order.get(hb, 0)
+            worsened = health_order.get(ha, 0) > health_order.get(hb, 0)
+            health_transitions.append({
+                "stage": after_s["stage"],
+                "health_before": hb,
+                "health_after": ha,
+                "severity_before": before_s["severity"],
+                "severity_after": after_s["severity"],
+                "score_before": before_s["bottleneck_score"],
+                "score_after": after_s["bottleneck_score"],
+                "queue_before": before_s["mean_queue_time"],
+                "queue_after": after_s["mean_queue_time"],
+                "duration_before": before_s["mean_duration"],
+                "duration_after": after_s["mean_duration"],
+                "sla_before": before_s["sla_violation_rate"],
+                "sla_after": after_s["sla_violation_rate"],
+                "changed": hb != ha,
+                "improved": improved,
+                "worsened": worsened
+            })
 
         return {
             "applied_intervention": full_sim["intervention"],
@@ -226,8 +263,15 @@ class ProcessService:
             "bottleneck_shifted": bottleneck_shifted,
             "new_primary_bottleneck": new_top_stage["stage"] if bottleneck_shifted else None,
             "new_primary_severity": new_top_stage["severity"] if bottleneck_shifted else None,
-            "original_stage_health_after": orig_before["health"] if orig_before else "Healthy",
-            "stages_after": re_ranked
+            "original_stage_health_before": next((s["health"] for s in stages_before if s["stage"] == target_stage), "Critical"),
+            "original_stage_health_after": orig_after["health"] if orig_after else "Healthy",
+            "original_stage_score_before": next((s["bottleneck_score"] for s in stages_before if s["stage"] == target_stage), 0),
+            "original_stage_score_after": orig_after["bottleneck_score"] if orig_after else 0,
+            "stages_before": stages_before,
+            "stages_after": re_ranked,
+            "map_before": map_before,
+            "map_after": map_after,
+            "health_transitions": health_transitions
         }
 
 process_service = ProcessService()
