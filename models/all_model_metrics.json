@@ -1,0 +1,111 @@
+{
+  "duration_predictor": {
+    "mae": 1.585,
+    "rmse": 2.322,
+    "r2": 0.9691,
+    "train_samples": 38400,
+    "test_samples": 9600
+  },
+  "anomaly_detector": {
+    "total_samples": 48000,
+    "anomaly_count": 3840,
+    "anomaly_percentage": 8.0,
+    "contamination": 0.08,
+    "feature_columns": [
+      "duration",
+      "queue_time",
+      "processing_time",
+      "resource_utilization",
+      "queue_length"
+    ]
+  },
+  "delay_classifier": {
+    "accuracy": 0.938,
+    "precision": 0.9354,
+    "recall": 0.938,
+    "f1_score": 0.9361,
+    "classes": [
+      "External Dependency",
+      "High Queue",
+      "Inventory Mismatch",
+      "Manual Processing",
+      "None",
+      "Peak Workload",
+      "Resource Shortage",
+      "System Delay"
+    ],
+    "top_features": {
+      "resource_utilization": 0.7357,
+      "stage_Inventory Check": 0.069,
+      "order_value_log": 0.0634,
+      "queue_length": 0.041,
+      "hour_of_day": 0.0274,
+      "day_of_week": 0.0137,
+      "stage_Payment Verification": 0.0119,
+      "stage_order": 0.011
+    },
+    "detailed_report": {
+      "External Dependency": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 33.0
+      },
+      "High Queue": {
+        "precision": 0.44610778443113774,
+        "recall": 0.5068027210884354,
+        "f1-score": 0.4745222929936306,
+        "support": 294.0
+      },
+      "Inventory Mismatch": {
+        "precision": 0.430939226519337,
+        "recall": 0.5416666666666666,
+        "f1-score": 0.48,
+        "support": 144.0
+      },
+      "Manual Processing": {
+        "precision": 0.3333333333333333,
+        "recall": 0.18681318681318682,
+        "f1-score": 0.23943661971830985,
+        "support": 91.0
+      },
+      "None": {
+        "precision": 0.9997685185185186,
+        "recall": 1.0,
+        "f1-score": 0.9998842458617896,
+        "support": 8638.0
+      },
+      "Peak Workload": {
+        "precision": 0.10714285714285714,
+        "recall": 0.03529411764705882,
+        "f1-score": 0.05309734513274336,
+        "support": 85.0
+      },
+      "Resource Shortage": {
+        "precision": 0.35858585858585856,
+        "recall": 0.35858585858585856,
+        "f1-score": 0.35858585858585856,
+        "support": 198.0
+      },
+      "System Delay": {
+        "precision": 0.3402777777777778,
+        "recall": 0.4188034188034188,
+        "f1-score": 0.37547892720306514,
+        "support": 117.0
+      },
+      "accuracy": 0.9380208333333333,
+      "macro avg": {
+        "precision": 0.3770194195386025,
+        "recall": 0.38099574620057813,
+        "f1-score": 0.37262566118692464,
+        "support": 9600.0
+      },
+      "weighted avg": {
+        "precision": 0.9353608725411436,
+        "recall": 0.9380208333333333,
+        "f1-score": 0.9361315324070495,
+        "support": 9600.0
+      }
+    }
+  }
+}
